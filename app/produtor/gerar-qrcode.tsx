@@ -1,4 +1,3 @@
-// app/produtor/gerar-qrcode.tsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Print from 'expo-print';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -24,9 +23,17 @@ type Lote = {
   quantidade: number;
   data_colheita: string;
   local_producao: string | null;
+  // se depois o backend mandar "codigo_rastreio",
+  // é só adicionar aqui: codigo_rastreio?: string;
 };
 
 const STORAGE_QR_GERADOS = '@qr_lotes_gerados';
+
+// gera um código de rastreio "humano" baseado no id
+function gerarCodigoRastreio(lote: Lote): string {
+  // depois podemos trocar por lote.codigo_rastreio vindo do backend
+  return `DOCAMPO-${String(lote.id).padStart(4, '0')}`;
+}
 
 export default function GerarQRCodeLote() {
   const router = useRouter();
@@ -187,10 +194,15 @@ export default function GerarQRCodeLote() {
     </TouchableOpacity>
   );
 
-  // valor dentro do QR
+  const codigoRastreio = loteSelecionado
+    ? gerarCodigoRastreio(loteSelecionado)
+    : '';
+
+  // valor dentro do QR (mantive JSON, agora incluindo o código também)
   const qrValue = loteSelecionado
     ? JSON.stringify({
         tipo: 'lote',
+        codigo: codigoRastreio,
         loteId: loteSelecionado.id,
         produto: loteSelecionado.produto,
       })
@@ -204,29 +216,27 @@ export default function GerarQRCodeLote() {
 
     try {
       await Share.share({
-        message: `QR Code do lote ${loteSelecionado.produto}.`,
+        message: `QR Code do lote ${loteSelecionado.produto} - Código de rastreio: ${codigoRastreio}.`,
       });
     } catch (error) {
       console.log('Erro ao compartilhar:', error);
     }
   };
 
-  // ---------- gerar PDF: COMPORTAMENTO DIFERENTE no WEB x MOBILE ----------
+  // ---------- gerar PDF: mobile usa expo-print + sharing ----------
   const handleImprimir = async () => {
     if (!loteSelecionado) return;
 
     marcarQrGerado(loteSelecionado.id);
 
-    // 👉 NO NAVEGADOR (Expo Web):
-    // não usamos expo-print para NÃO abrir a tela de impressão do Chrome.
+    // No navegador de desenvolvimento a gente só mostra um aviso.
     if (Platform.OS === 'web') {
       setPdfUri(null);
-      setModalPrintVisivel(true); // só mostra um aviso
+      setModalPrintVisivel(true);
       return;
     }
 
-    // 👉 NO CELULAR (Android / iOS):
-    // gera PDF com APENAS QR + produto + sítio
+    // NO CELULAR (Android / iOS):
     if (!qrRef.current) return;
 
     try {
@@ -254,7 +264,12 @@ export default function GerarQRCodeLote() {
                     color: #166534;
                     font-size: 16px;
                     margin-top: 0;
-                    margin-bottom: 24px;
+                    margin-bottom: 12px;
+                  }
+                  p {
+                    font-size: 14px;
+                    color: #111827;
+                    margin: 4px 0 16px 0;
                   }
                   .qr-box {
                     margin-top: 10px;
@@ -270,6 +285,7 @@ export default function GerarQRCodeLote() {
               <body>
                 <h1>${loteSelecionado.produto}</h1>
                 <h2>${local}</h2>
+                <p>Código de rastreio: <strong>${codigoRastreio}</strong></p>
                 <div class="qr-box">
                   <img src="data:image/png;base64,${data}" />
                 </div>
@@ -279,7 +295,7 @@ export default function GerarQRCodeLote() {
 
           const { uri } = await Print.printToFileAsync({ html });
 
-          setPdfUri(uri); // PDF pronto para compartilhar
+          setPdfUri(uri); // PDF pronto para compartilhar/salvar
           setModalPrintVisivel(true); // abre modal DENTRO do app
         } catch (err) {
           console.log('Erro ao gerar PDF:', err);
@@ -291,7 +307,7 @@ export default function GerarQRCodeLote() {
     }
   };
 
-  // ------------- botão do modal: salvar/compartilhar PDF (apenas mobile) -------------
+  // ------------- botão do modal: salvar/compartilhar PDF (mobile) -------------
   const acaoSalvarOuCompartilharPdf = async () => {
     if (!pdfUri) return;
 
@@ -339,8 +355,18 @@ export default function GerarQRCodeLote() {
                   ? 'Reimprimir QR Code'
                   : 'Gerar QR Code do lote'}
               </Text>
+
+              {/* Nome do produto */}
               <Text style={styles.qrSubtitulo}>
                 {loteSelecionado.produto}
+              </Text>
+
+              {/* Código de rastreio em texto */}
+              <Text style={styles.qrCodigo}>
+                Código de rastreio:{' '}
+                <Text style={styles.qrCodigoValor}>
+                  {codigoRastreio}
+                </Text>
               </Text>
 
               <View style={styles.qrBox}>
@@ -427,7 +453,7 @@ export default function GerarQRCodeLote() {
             <Text style={styles.modalTitulo}>QR Code gerado</Text>
             <Text style={styles.modalTexto}>
               {Platform.OS === 'web'
-                ? 'No navegador de desenvolvimento não é possível gerar o PDF como no celular. Esta função vai funcionar normalmente no app instalado (Android/iOS), permitindo salvar ou compartilhar o PDF do QR Code.'
+                ? 'No navegador não é possível salvar direto como no app instalado. No Android/iOS o botão PDF/Salvar vai gerar um arquivo dentro do app para você salvar ou compartilhar pelo próprio celular.'
                 : 'O PDF com o QR Code foi gerado. Você pode salvar ou compartilhar este arquivo a partir do seu celular.'}
             </Text>
 
@@ -506,8 +532,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#14532D',
     fontWeight: '600',
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  qrCodigo: {
+    fontSize: 13,
+    color: '#14532D',
     marginBottom: 8,
     textAlign: 'center',
+  },
+  qrCodigoValor: {
+    fontWeight: '700',
   },
   qrBox: {
     backgroundColor: '#FFFFFF',

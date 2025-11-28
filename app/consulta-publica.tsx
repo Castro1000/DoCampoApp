@@ -1,4 +1,3 @@
-// app/consulta-publica.tsx
 import { BarCodeScanner, BarCodeScannerResult } from "expo-barcode-scanner";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -52,11 +51,39 @@ export default function ConsultaPublicaScreen() {
     return d.toLocaleDateString();
   }
 
+  // tenta extrair DOCAMPO-000X de um JSON lido pelo QR
+  function normalizarCodigoBruto(codigoBruto: string): string {
+    let codigoFinal = codigoBruto.trim();
+
+    // se for um JSON (começa com {), tenta pegar o campo "codigo"
+    if (codigoFinal.startsWith("{")) {
+      try {
+        const obj = JSON.parse(codigoFinal);
+        if (obj && typeof obj === "object") {
+          if (obj.codigo) {
+            codigoFinal = String(obj.codigo);
+          } else if (obj.loteId) {
+            // fallback: monta pelo id do lote
+            const idNum = Number(obj.loteId);
+            if (!Number.isNaN(idNum)) {
+              codigoFinal = `DOCAMPO-${String(idNum).padStart(4, "0")}`;
+            }
+          }
+        }
+      } catch {
+        // se der erro no JSON, mantém o texto original
+      }
+    }
+
+    return codigoFinal.trim().toUpperCase();
+  }
+
   async function handleConsultar(codigoParam?: string) {
     setErro(null);
     setResultado(null);
 
-    const codigoUsado = (codigoParam ?? codigo).trim();
+    const codigoBruto = (codigoParam ?? codigo).trim();
+    const codigoUsado = normalizarCodigoBruto(codigoBruto);
 
     if (!codigoUsado) {
       setErro("Digite ou escaneie o código de rastreio.");
@@ -134,19 +161,22 @@ export default function ConsultaPublicaScreen() {
   }
 
   function handleBarCodeScanned(result: BarCodeScannerResult) {
-    const valorLido = String(result.data || "").trim();
-    console.log(">>> CÓDIGO ESCANEADO:", valorLido);
+    const valorLidoBruto = String(result.data || "").trim();
+    console.log(">>> CÓDIGO ESCANEADO (bruto):", valorLidoBruto);
+
+    const valorNormalizado = normalizarCodigoBruto(valorLidoBruto);
+    console.log(">>> CÓDIGO ESCANEADO (normalizado):", valorNormalizado);
 
     setScannerAtivo(false);
 
-    if (!valorLido) {
+    if (!valorNormalizado) {
       setErro("Não foi possível ler o código. Tente novamente.");
       return;
     }
 
-    // Preenche o campo e já consulta
-    setCodigo(valorLido);
-    handleConsultar(valorLido);
+    // Preenche o campo com DOCAMPO-000X e já consulta
+    setCodigo(valorNormalizado);
+    handleConsultar(valorNormalizado);
   }
 
   // Se o scanner está ativo (somente em app nativo), mostramos a “tela” de câmera
@@ -214,7 +244,7 @@ export default function ConsultaPublicaScreen() {
         <Text style={styles.label}>Código de rastreio</Text>
         <TextInput
           style={styles.input}
-          placeholder="Ex: LOTE-2025-0001"
+          placeholder="Ex: DOCAMPO-0001"
           placeholderTextColor="#9CA3AF"
           value={codigo}
           onChangeText={setCodigo}
