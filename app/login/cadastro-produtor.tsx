@@ -32,12 +32,38 @@ export default function CadastroProdutor() {
   const [modalVisivel, setModalVisivel] = useState(false);
   const [modalMensagem, setModalMensagem] = useState('');
 
+  // Só números no CPF/CNPJ, no máximo 14 dígitos
+  const handleChangeCpfCnpj = (texto: string) => {
+    const apenasDigitos = texto.replace(/\D/g, ''); // remove tudo que não for número
+    if (apenasDigitos.length <= 14) {
+      setCpfCnpj(apenasDigitos);
+    }
+  };
+
+  // Normaliza e-mail (tira espaços e deixa minúsculo)
+  const handleChangeEmail = (texto: string) => {
+    setEmail(texto.trim().toLowerCase());
+  };
+
   const handleCadastrar = async () => {
     setMensagem('');
     setErro('');
 
     if (!nome || !cpfCnpj || !email || !senha || !confirmarSenha) {
       setErro('Preencha todos os campos obrigatórios.');
+      return;
+    }
+
+    // valida CPF/CNPJ: só deixa seguir se tiver 11 ou 14 dígitos
+    if (cpfCnpj.length !== 11 && cpfCnpj.length !== 14) {
+      setErro('Digite um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.');
+      return;
+    }
+
+    // valida e-mail (precisa ter formato algo@dominio.com)
+    const emailRegex = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+    if (!emailRegex.test(email)) {
+      setErro('Digite um e-mail válido (ex: nome@exemplo.com).');
       return;
     }
 
@@ -159,7 +185,8 @@ export default function CadastroProdutor() {
             placeholderTextColor="#8AA08E"
             keyboardType="numeric"
             value={cpfCnpj}
-            onChangeText={setCpfCnpj}
+            onChangeText={handleChangeCpfCnpj}
+            maxLength={14} // 11 (CPF) ou 14 (CNPJ)
           />
         </View>
 
@@ -173,7 +200,7 @@ export default function CadastroProdutor() {
             keyboardType="email-address"
             autoCapitalize="none"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={handleChangeEmail}
           />
         </View>
 
