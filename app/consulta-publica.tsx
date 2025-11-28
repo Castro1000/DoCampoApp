@@ -28,6 +28,49 @@ interface ResultadoRastreio {
   status_transporte?: string | null;
 }
 
+/**
+ * FAKER: dados de exemplo para quando a API não responder.
+ * Você pode usar DOCAMPO-21, DOCAMPO-22 ou DOCAMPO-23 na apresentação.
+ */
+const FAKE_RASTREIOS: Record<string, ResultadoRastreio> = {
+  "DOCAMPO-21": {
+    codigo: "DOCAMPO-21",
+    produto: "Alface Crespa",
+    variedade: "Orgânica",
+    produtor_nome: "Ivaney de Castro",
+    produtor_comunidade: "Comunidade São José",
+    produtor_municipio: "Manaus - AM",
+    data_colheita: "2024-11-20T00:00:00.000Z",
+    data_envio: "2024-11-21T00:00:00.000Z",
+    transportador_nome: "Transportadora Verde Vida",
+    status_transporte: "ENTREGUE",
+  },
+  "DOCAMPO-22": {
+    codigo: "DOCAMPO-22",
+    produto: "Tomate Italiano",
+    variedade: "Agricultura Familiar",
+    produtor_nome: "Maria do Carmo",
+    produtor_comunidade: "Comunidade Bom Futuro",
+    produtor_municipio: "Iranduba - AM",
+    data_colheita: "2024-11-18T00:00:00.000Z",
+    data_envio: "2024-11-19T00:00:00.000Z",
+    transportador_nome: "TransRibeirinho",
+    status_transporte: "EM TRANSPORTE",
+  },
+  "DOCAMPO-23": {
+    codigo: "DOCAMPO-23",
+    produto: "Cenoura",
+    variedade: "Orgânica",
+    produtor_nome: "João Silva",
+    produtor_comunidade: "Comunidade Santa Luzia",
+    produtor_municipio: "Manacapuru - AM",
+    data_colheita: "2024-11-15T00:00:00.000Z",
+    data_envio: "2024-11-16T00:00:00.000Z",
+    transportador_nome: "Log Rural Amazônia",
+    status_transporte: "EM PREPARO",
+  },
+};
+
 export default function ConsultaPublicaScreen() {
   const router = useRouter();
 
@@ -52,9 +95,6 @@ export default function ConsultaPublicaScreen() {
   }
 
   // 🔧 NORMALIZA o código lido/digitado para bater com o banco
-  // - Se vier JSON, tenta pegar campo "codigo" ou "loteId"
-  // - Se for só número -> DOCAMPO-<numero>
-  // - Se for DOCAMPO-0021 -> DOCAMPO-21 (remove zeros à esquerda)
   function normalizarCodigoBruto(codigoBruto: string): string {
     let codigoFinal = codigoBruto.trim();
 
@@ -99,6 +139,18 @@ export default function ConsultaPublicaScreen() {
     return codigoFinal;
   }
 
+  // FAKER: função de fallback para usar os dados fictícios
+  function tentarFallbackFake(codigoUsado: string): boolean {
+    const fake = FAKE_RASTREIOS[codigoUsado];
+    if (fake) {
+      setResultado(fake);
+      setErro(null);
+      console.log(">>> USANDO DADOS FICTÍCIOS PARA:", codigoUsado);
+      return true;
+    }
+    return false;
+  }
+
   async function handleConsultar(codigoParam?: string) {
     setErro(null);
     setResultado(null);
@@ -128,6 +180,9 @@ export default function ConsultaPublicaScreen() {
       console.log(">>> RESPOSTA consulta-publica:", resp.status, data);
 
       if (!resp.ok || !data.sucesso || !data.rastreio) {
+        // FAKER: se a API falhar, tenta usar os dados fictícios
+        if (tentarFallbackFake(codigoUsado)) return;
+
         setErro(
           data?.erro ||
             "Não encontramos informações para esse código. Confira se digitou/escaneou corretamente."
@@ -138,7 +193,11 @@ export default function ConsultaPublicaScreen() {
       setResultado(data.rastreio as ResultadoRastreio);
     } catch (e: any) {
       console.error(e);
-      setErro("Erro de conexão. Verifique sua internet e tente novamente.");
+
+      // FAKER: se der erro de conexão, também tenta usar os dados fictícios
+      if (!tentarFallbackFake(codigoUsado)) {
+        setErro("Erro de conexão. Verifique sua internet e tente novamente.");
+      }
     } finally {
       setLoading(false);
     }
