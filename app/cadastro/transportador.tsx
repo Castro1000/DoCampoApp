@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 
-const API_BASE_URL = "http://localhost:3001/api";
+const API_BASE_URL = "https://docampo-backend-production.up.railway.app/api";
 
 type ModalType = "erro" | "sucesso" | "confirmacao";
 

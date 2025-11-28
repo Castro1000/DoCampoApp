@@ -1,18 +1,18 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 // Ajusta para o endereço do seu backend
-const API_BASE_URL = "http://localhost:3001/api";
+const API_BASE_URL = "https://docampo-backend-production.up.railway.app/api";
 
 type Transporte = {
   id: number;
