@@ -27,7 +27,7 @@ export default function EditarLote() {
     const carregar = async () => {
       if (!id) return;
       try {
-        const resp = await fetch(`http://localhost:3001/api/lotes/${id}`);
+        const resp = await fetch(`https://docampo-backend-production.up.railway.app/api/lotes/${id}`);
         const data = await resp.json();
         if (!resp.ok) {
           Alert.alert('Erro', data.erro || 'Erro ao buscar lote.');
@@ -74,7 +74,7 @@ export default function EditarLote() {
         local_producao: localProducao,
       };
 
-      const resp = await fetch(`http://localhost:3001/api/lotes/${id}`, {
+      const resp = await fetch(`https://docampo-backend-production.up.railway.app/api/lotes/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

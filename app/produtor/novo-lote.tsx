@@ -69,7 +69,7 @@ export default function NovoLote() {
 
       console.log('Enviando POST /api/lotes com body:', body);
 
-      const resp = await fetch('http://localhost:3001/api/lotes', {
+      const resp = await fetch('https://docampo-backend-production.up.railway.app/api/lotes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

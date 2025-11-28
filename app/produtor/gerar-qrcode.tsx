@@ -97,7 +97,7 @@ export default function GerarQRCodeLote() {
           setProdutorId(idNum);
 
           const resp = await fetch(
-            `http://localhost:3001/api/lotes/produtor/${idNum}`,
+            `https://docampo-backend-production.up.railway.app/api/lotes/produtor/${idNum}`,
           );
           const data = await resp.json();
 
