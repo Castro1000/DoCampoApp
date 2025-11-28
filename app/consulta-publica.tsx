@@ -16,7 +16,6 @@ import {
 
 const API_BASE_URL = "https://docampo-backend-production.up.railway.app/api";
 
-
 interface ResultadoRastreio {
   codigo: string;
   produto: string;
@@ -44,6 +43,8 @@ export default function ConsultaPublicaScreen() {
   );
   const [scannerAtivo, setScannerAtivo] = useState(false);
 
+  const isWeb = Platform.OS === "web";
+
   function formatarData(iso?: string | null) {
     if (!iso) return "-";
     const d = new Date(iso);
@@ -65,7 +66,6 @@ export default function ConsultaPublicaScreen() {
     try {
       setLoading(true);
 
-      // GET /api/consulta-publica/:codigo
       const resp = await fetch(
         `${API_BASE_URL}/consulta-publica/${encodeURIComponent(codigoUsado)}`
       );
@@ -101,6 +101,14 @@ export default function ConsultaPublicaScreen() {
   // --------------------------------------------------
   async function abrirScanner() {
     setErro(null);
+
+    // Se estiver no navegador web, não usamos o BarCodeScanner
+    if (isWeb) {
+      setErro(
+        "A leitura por câmera não é suportada nesta versão web. Digite o código de rastreio manualmente ou utilize o app instalado."
+      );
+      return;
+    }
 
     // Se ainda não pediu permissão, pede agora
     if (temPermissaoCamera === null) {
@@ -141,8 +149,8 @@ export default function ConsultaPublicaScreen() {
     handleConsultar(valorLido);
   }
 
-  // Se o scanner está ativo, mostramos uma “tela” de câmera por cima
-  if (scannerAtivo) {
+  // Se o scanner está ativo (somente em app nativo), mostramos a “tela” de câmera
+  if (scannerAtivo && !isWeb) {
     return (
       <View style={styles.scannerContainer}>
         <BarCodeScanner
@@ -227,9 +235,13 @@ export default function ConsultaPublicaScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Botão scanner */}
+        {/* Botão scanner (explicação extra no web) */}
         <TouchableOpacity style={styles.scanButton} onPress={abrirScanner}>
-          <Text style={styles.scanButtonText}>📷 Escanear com a câmera</Text>
+          <Text style={styles.scanButtonText}>
+            {isWeb
+              ? "📷 Escanear (disponível apenas no app)"
+              : "📷 Escanear com a câmera"}
+          </Text>
         </TouchableOpacity>
 
         {/* MENSAGENS */}
