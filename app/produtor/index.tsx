@@ -53,7 +53,7 @@ export default function HomeProdutor() {
     try {
       setErro('');
       const resp = await fetch(
-        `http://localhost:3001/api/lotes/produtor/${id}`
+        `https://docampo-backend-production.up.railway.app/api/lotes/produtor/${id}`
       );
       const data = await resp.json();
 
