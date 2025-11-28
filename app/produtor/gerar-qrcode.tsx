@@ -1,3 +1,4 @@
+// app/produtor/gerar-qrcode.tsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Print from 'expo-print';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -23,17 +24,9 @@ type Lote = {
   quantidade: number;
   data_colheita: string;
   local_producao: string | null;
-  // se depois o backend mandar "codigo_rastreio",
-  // é só adicionar aqui: codigo_rastreio?: string;
 };
 
 const STORAGE_QR_GERADOS = '@qr_lotes_gerados';
-
-// gera um código de rastreio "humano" baseado no id
-function gerarCodigoRastreio(lote: Lote): string {
-  // depois podemos trocar por lote.codigo_rastreio vindo do backend
-  return `DOCAMPO-${String(lote.id).padStart(4, '0')}`;
-}
 
 export default function GerarQRCodeLote() {
   const router = useRouter();
@@ -43,88 +36,67 @@ export default function GerarQRCodeLote() {
   const [erro, setErro] = useState('');
   const [loteSelecionado, setLoteSelecionado] = useState<Lote | null>(null);
 
-  // ids de lotes que já tiveram QR gerado
   const [qrGeradoIds, setQrGeradoIds] = useState<number[]>([]);
-
   const qrRef = useRef<any>(null);
 
-  // modal de PDF / salvar
   const [modalPrintVisivel, setModalPrintVisivel] = useState(false);
   const [pdfUri, setPdfUri] = useState<string | null>(null);
 
-  // ------------ utilidades de estado de QR gerado -------------
   const carregarQrGerados = async () => {
     try {
       const salvo = await AsyncStorage.getItem(STORAGE_QR_GERADOS);
-      if (salvo) {
-        const ids = JSON.parse(salvo) as number[];
-        setQrGeradoIds(ids);
-      }
-    } catch (e) {
-      console.log('Erro ao carregar qr gerados', e);
-    }
+      if (salvo) setQrGeradoIds(JSON.parse(salvo));
+    } catch (e) {}
   };
 
   const salvarQrGerados = async (ids: number[]) => {
     try {
       await AsyncStorage.setItem(STORAGE_QR_GERADOS, JSON.stringify(ids));
-    } catch (e) {
-      console.log('Erro ao salvar qr gerados', e);
-    }
+    } catch (e) {}
   };
 
   const marcarQrGerado = (id: number) => {
-    setQrGeradoIds(prev => {
-      if (prev.includes(id)) return prev;
-      const nova = [...prev, id];
-      salvarQrGerados(nova);
-      return nova;
-    });
+    if (!qrGeradoIds.includes(id)) {
+      const novo = [...qrGeradoIds, id];
+      setQrGeradoIds(novo);
+      salvarQrGerados(novo);
+    }
   };
 
-  // ---------------- carregar lotes ao entrar na tela ---------------
   useFocusEffect(
     useCallback(() => {
       let ativo = true;
 
       const carregar = async () => {
+        setCarregando(true);
+        setErro('');
+
+        const idStr = await AsyncStorage.getItem('@produtor_id');
+        if (!idStr) {
+          router.replace('/login/produtor');
+          return;
+        }
+
+        const idNum = Number(idStr);
+        if (!ativo) return;
+
+        setProdutorId(idNum);
+
         try {
-          setCarregando(true);
-          setErro('');
-
-          const idStr = await AsyncStorage.getItem('@produtor_id');
-          if (!idStr) {
-            router.replace('/login/produtor');
-            return;
-          }
-
-          const idNum = Number(idStr);
-          if (!ativo) return;
-
-          setProdutorId(idNum);
-
           const resp = await fetch(
-            `https://docampo-backend-production.up.railway.app/api/lotes/produtor/${idNum}`,
+            `https://docampo-backend-production.up.railway.app/api/lotes/produtor/${idNum}`
           );
           const data = await resp.json();
 
-          if (!resp.ok) {
-            setErro(data.erro || 'Erro ao carregar lotes.');
-            setLotes([]);
-          } else {
-            setLotes(data);
-          }
+          if (!resp.ok) setErro(data.erro || 'Erro ao carregar lotes.');
+          else setLotes(data);
 
           await carregarQrGerados();
         } catch (e) {
-          console.error(e);
-          if (ativo) {
-            setErro('Erro de conexão ao carregar lotes.');
-            setLotes([]);
-          }
-        } finally {
-          if (ativo) setCarregando(false);
+          setErro('Erro de conexão ao carregar lotes.');
         }
+
+        if (ativo) setCarregando(false);
       };
 
       carregar();
@@ -132,17 +104,8 @@ export default function GerarQRCodeLote() {
       return () => {
         ativo = false;
       };
-    }, [router]),
+    }, [router])
   );
-
-  const handleVoltar = () => {
-    // @ts-ignore
-    if (router.canGoBack && router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/produtor');
-    }
-  };
 
   const handleSelecionarLote = (lote: Lote) => {
     setLoteSelecionado(lote);
@@ -150,7 +113,115 @@ export default function GerarQRCodeLote() {
 
   const jaGerouQr = (id: number) => qrGeradoIds.includes(id);
 
-  // ----------------- render dos cards de lote -----------------
+  // === Código DO QR ===
+  const codigoRastreio =
+    loteSelecionado &&
+    `DOCAMPO-${String(loteSelecionado.id).padStart(4, '0')}`;
+
+  const qrValue = loteSelecionado
+    ? JSON.stringify({
+        codigo: codigoRastreio,
+        loteId: loteSelecionado.id,
+        produto: loteSelecionado.produto,
+      })
+    : '';
+
+  // === Compartilhar texto (WhatsApp, etc) ===
+  const handleCompartilhar = async () => {
+    if (!loteSelecionado) return;
+    marcarQrGerado(loteSelecionado.id);
+
+    await Share.share({
+      message: `QR Code do lote ${loteSelecionado.produto} (${codigoRastreio}).`,
+    });
+  };
+
+  // === GERAR PDF NO CELULAR ===
+  const handleImprimir = async () => {
+    if (!loteSelecionado) return;
+
+    marcarQrGerado(loteSelecionado.id);
+
+    if (Platform.OS === 'web') {
+      setModalPrintVisivel(true);
+      return;
+    }
+
+    if (!qrRef.current) return;
+
+    qrRef.current.toDataURL(async (data: string) => {
+      try {
+        const local =
+          loteSelecionado.local_producao || 'Local não informado';
+
+        const html = `
+          <html>
+            <head>
+              <meta name="viewport" content="initial-scale=1, width=device-width" />
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                  text-align: center;
+                  padding-top: 40px;
+                }
+                h1 {
+                  color: #14532D;
+                  font-size: 26px;
+                  margin-bottom: 4px;
+                }
+                h2 {
+                  color: #0f5132;
+                  font-size: 20px;
+                  margin: 4px 0 14px 0;
+                }
+                h3 {
+                  color: #166534;
+                  font-size: 16px;
+                  margin-bottom: 20px;
+                }
+                img {
+                  width: 260px;
+                  height: 260px;
+                }
+              </style>
+            </head>
+            <body>
+              <h1>${loteSelecionado.produto}</h1>
+              <h2>Código de rastreio: ${codigoRastreio}</h2>
+              <h3>${local}</h3>
+
+              <img src="data:image/png;base64,${data}" />
+            </body>
+          </html>
+        `;
+
+        const { uri } = await Print.printToFileAsync({ html });
+        setPdfUri(uri);
+        setModalPrintVisivel(true);
+      } catch (err) {
+        Alert.alert('Erro', 'Não foi possível gerar o PDF.');
+      }
+    });
+  };
+
+  const salvarPdfMobile = async () => {
+    if (!pdfUri) return;
+
+    const disponivel = await Sharing.isAvailableAsync();
+    if (!disponivel) {
+      Alert.alert(
+        'Indisponível',
+        'Seu dispositivo não suporta salvar/compartilhar arquivos.'
+      );
+      return;
+    }
+
+    await Sharing.shareAsync(pdfUri, {
+      mimeType: 'application/pdf',
+      dialogTitle: 'Salvar / Compartilhar PDF',
+    });
+  };
+
   const renderLote = ({ item }: { item: Lote }) => (
     <TouchableOpacity
       style={styles.cardLote}
@@ -161,7 +232,9 @@ export default function GerarQRCodeLote() {
         <View
           style={[
             styles.badge,
-            jaGerouQr(item.id) ? styles.badgeReimprimir : styles.badgeGerar,
+            jaGerouQr(item.id)
+              ? styles.badgeReimprimir
+              : styles.badgeGerar,
           ]}
         >
           <Text
@@ -176,8 +249,7 @@ export default function GerarQRCodeLote() {
       </View>
 
       <Text style={styles.cardLinha}>
-        Quantidade:{' '}
-        <Text style={styles.cardValor}>{item.quantidade} un.</Text>
+        Quantidade: <Text style={styles.cardValor}>{item.quantidade}</Text>
       </Text>
       <Text style={styles.cardLinha}>
         Colheita:{' '}
@@ -194,151 +266,10 @@ export default function GerarQRCodeLote() {
     </TouchableOpacity>
   );
 
-  const codigoRastreio = loteSelecionado
-    ? gerarCodigoRastreio(loteSelecionado)
-    : '';
-
-  // valor dentro do QR (mantive JSON, agora incluindo o código também)
-  const qrValue = loteSelecionado
-    ? JSON.stringify({
-        tipo: 'lote',
-        codigo: codigoRastreio,
-        loteId: loteSelecionado.id,
-        produto: loteSelecionado.produto,
-      })
-    : '';
-
-  // ---------------- compartilhamento simples (texto) ----------------
-  const handleCompartilhar = async () => {
-    if (!loteSelecionado) return;
-
-    marcarQrGerado(loteSelecionado.id);
-
-    try {
-      await Share.share({
-        message: `QR Code do lote ${loteSelecionado.produto} - Código de rastreio: ${codigoRastreio}.`,
-      });
-    } catch (error) {
-      console.log('Erro ao compartilhar:', error);
-    }
-  };
-
-  // ---------- gerar PDF: mobile usa expo-print + sharing ----------
-  const handleImprimir = async () => {
-    if (!loteSelecionado) return;
-
-    marcarQrGerado(loteSelecionado.id);
-
-    // No navegador de desenvolvimento a gente só mostra um aviso.
-    if (Platform.OS === 'web') {
-      setPdfUri(null);
-      setModalPrintVisivel(true);
-      return;
-    }
-
-    // NO CELULAR (Android / iOS):
-    if (!qrRef.current) return;
-
-    try {
-      qrRef.current.toDataURL(async (data: string) => {
-        try {
-          const local =
-            loteSelecionado.local_producao || 'Sítio não informado';
-
-          const html = `
-            <html>
-              <head>
-                <meta name="viewport" content="initial-scale=1, width=device-width" />
-                <style>
-                  body {
-                    font-family: Arial, sans-serif;
-                    text-align: center;
-                    padding-top: 60px;
-                  }
-                  h1 {
-                    color: #14532D;
-                    font-size: 22px;
-                    margin-bottom: 6px;
-                  }
-                  h2 {
-                    color: #166534;
-                    font-size: 16px;
-                    margin-top: 0;
-                    margin-bottom: 12px;
-                  }
-                  p {
-                    font-size: 14px;
-                    color: #111827;
-                    margin: 4px 0 16px 0;
-                  }
-                  .qr-box {
-                    margin-top: 10px;
-                    display: flex;
-                    justify-content: center;
-                  }
-                  img {
-                    width: 260px;
-                    height: 260px;
-                  }
-                </style>
-              </head>
-              <body>
-                <h1>${loteSelecionado.produto}</h1>
-                <h2>${local}</h2>
-                <p>Código de rastreio: <strong>${codigoRastreio}</strong></p>
-                <div class="qr-box">
-                  <img src="data:image/png;base64,${data}" />
-                </div>
-              </body>
-            </html>
-          `;
-
-          const { uri } = await Print.printToFileAsync({ html });
-
-          setPdfUri(uri); // PDF pronto para compartilhar/salvar
-          setModalPrintVisivel(true); // abre modal DENTRO do app
-        } catch (err) {
-          console.log('Erro ao gerar PDF:', err);
-          Alert.alert('Erro', 'Não foi possível gerar o PDF.');
-        }
-      });
-    } catch (error) {
-      console.log('Erro ao preparar PDF:', error);
-    }
-  };
-
-  // ------------- botão do modal: salvar/compartilhar PDF (mobile) -------------
-  const acaoSalvarOuCompartilharPdf = async () => {
-    if (!pdfUri) return;
-
-    try {
-      const disponivel = await Sharing.isAvailableAsync();
-      if (!disponivel) {
-        Alert.alert(
-          'Recurso indisponível',
-          'Salvar/compartilhar PDF não está disponível neste dispositivo.',
-        );
-        return;
-      }
-
-      await Sharing.shareAsync(pdfUri, {
-        mimeType: 'application/pdf',
-        dialogTitle: 'Salvar ou compartilhar PDF do QR Code',
-      });
-    } catch (e) {
-      console.log('Erro ao compartilhar PDF:', e);
-    }
-  };
-
-  const jaGerouSelecionado =
-    loteSelecionado && jaGerouQr(loteSelecionado.id);
-
-  // --------------------------- UI ---------------------------
   return (
     <View style={styles.root}>
-      {/* Top bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={handleVoltar}>
+        <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.voltar}>{'< Voltar'}</Text>
         </TouchableOpacity>
         <Text style={styles.topTitulo}>Gerar QR Code</Text>
@@ -346,34 +277,23 @@ export default function GerarQRCodeLote() {
       </View>
 
       <View style={styles.container}>
-        {/* QR CODE NO TOPO */}
         <View style={styles.qrContainer}>
           {loteSelecionado ? (
             <>
               <Text style={styles.qrTitulo}>
-                {jaGerouSelecionado
+                {jaGerouQr(loteSelecionado.id)
                   ? 'Reimprimir QR Code'
                   : 'Gerar QR Code do lote'}
               </Text>
 
-              {/* Nome do produto */}
-              <Text style={styles.qrSubtitulo}>
-                {loteSelecionado.produto}
-              </Text>
-
-              {/* Código de rastreio em texto */}
-              <Text style={styles.qrCodigo}>
-                Código de rastreio:{' '}
-                <Text style={styles.qrCodigoValor}>
-                  {codigoRastreio}
-                </Text>
-              </Text>
+              <Text style={styles.qrSubtitulo}>{loteSelecionado.produto}</Text>
+              <Text style={styles.qrCodigo}>Código de rastreio: {codigoRastreio}</Text>
 
               <View style={styles.qrBox}>
                 <QRCode
                   value={qrValue || ' '}
                   size={200}
-                  getRef={c => (qrRef.current = c)}
+                  getRef={(c) => (qrRef.current = c)}
                 />
               </View>
 
@@ -402,59 +322,39 @@ export default function GerarQRCodeLote() {
               <Text style={styles.qrTitulo}>
                 Selecione um lote para gerar o QR Code
               </Text>
-              <Text style={styles.qrDescricao}>
-                Toque em um dos lotes abaixo para criar ou reimprimir o
-                QR Code de rastreamento.
-              </Text>
             </>
           )}
         </View>
 
         <Text style={styles.subtitulo}>
-          Lotes cadastrados ({lotes.length}) – os que já tiveram QR
-          gerado aparecem como "Reimprimir QR".
+          Lotes cadastrados ({lotes.length})
         </Text>
 
         {carregando ? (
           <View style={styles.center}>
             <ActivityIndicator />
           </View>
+        ) : erro ? (
+          <Text style={styles.mensagemErro}>{erro}</Text>
         ) : (
-          <>
-            {erro ? <Text style={styles.mensagemErro}>{erro}</Text> : null}
-
-            {lotes.length === 0 && !erro ? (
-              <View style={styles.center}>
-                <Text style={styles.semLotes}>
-                  Você ainda não cadastrou nenhum lote.
-                </Text>
-              </View>
-            ) : (
-              <FlatList
-                data={lotes}
-                keyExtractor={item => String(item.id)}
-                renderItem={renderLote}
-                contentContainerStyle={styles.lista}
-              />
-            )}
-          </>
+          <FlatList
+            data={lotes}
+            keyExtractor={(i) => String(i.id)}
+            renderItem={renderLote}
+            contentContainerStyle={styles.lista}
+          />
         )}
       </View>
 
-      {/* MODAL interno do app */}
-      <Modal
-        visible={modalPrintVisivel}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setModalPrintVisivel(false)}
-      >
+      {/* MODAL */}
+      <Modal visible={modalPrintVisivel} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCaixa}>
             <Text style={styles.modalTitulo}>QR Code gerado</Text>
             <Text style={styles.modalTexto}>
               {Platform.OS === 'web'
-                ? 'No navegador não é possível salvar direto como no app instalado. No Android/iOS o botão PDF/Salvar vai gerar um arquivo dentro do app para você salvar ou compartilhar pelo próprio celular.'
-                : 'O PDF com o QR Code foi gerado. Você pode salvar ou compartilhar este arquivo a partir do seu celular.'}
+                ? 'No navegador não é possível salvar direto. No app instalado você poderá salvar ou compartilhar o PDF normalmente.'
+                : 'Agora você pode salvar ou compartilhar o PDF gerado.'}
             </Text>
 
             <View style={styles.modalBotoesLinha}>
@@ -470,7 +370,7 @@ export default function GerarQRCodeLote() {
               {Platform.OS !== 'web' && pdfUri && (
                 <TouchableOpacity
                   style={styles.modalBotao}
-                  onPress={acaoSalvarOuCompartilharPdf}
+                  onPress={salvarPdfMobile}
                 >
                   <Text style={styles.modalBotaoTexto}>
                     Salvar / Compartilhar PDF
@@ -485,7 +385,7 @@ export default function GerarQRCodeLote() {
   );
 }
 
-// ----------------- estilos -----------------
+// === ESTILOS ===
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -512,7 +412,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingBottom: 16,
   },
   qrContainer: {
     backgroundColor: '#D1FAE5',
@@ -525,35 +424,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#1D5B2C',
-    textAlign: 'center',
     marginBottom: 4,
   },
   qrSubtitulo: {
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
     color: '#14532D',
-    fontWeight: '600',
-    marginBottom: 2,
-    textAlign: 'center',
   },
   qrCodigo: {
-    fontSize: 13,
-    color: '#14532D',
+    fontSize: 14,
     marginBottom: 8,
-    textAlign: 'center',
-  },
-  qrCodigoValor: {
-    fontWeight: '700',
+    color: '#0f5132',
+    fontWeight: '600',
   },
   qrBox: {
-    backgroundColor: '#FFFFFF',
-    padding: 12,
+    backgroundColor: '#fff',
+    padding: 14,
     borderRadius: 16,
     marginBottom: 12,
   },
   qrBotoesLinha: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     width: '100%',
+    justifyContent: 'space-between',
   },
   qrBotaoPrimario: {
     flex: 1,
@@ -564,50 +458,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   qrBotaoPrimarioTexto: {
-    color: '#FFFFFF',
+    color: '#fff',
     fontWeight: '700',
-    fontSize: 13,
   },
   qrBotaoSecundario: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
+    borderColor: '#1D5B2C',
+    borderWidth: 1,
     paddingVertical: 10,
     borderRadius: 999,
     marginLeft: 6,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#1D5B2C',
   },
   qrBotaoSecundarioTexto: {
     color: '#1D5B2C',
     fontWeight: '700',
-    fontSize: 13,
-  },
-  qrDescricao: {
-    fontSize: 12,
-    color: '#14532D',
-    textAlign: 'center',
   },
   subtitulo: {
-    fontSize: 13,
+    fontSize: 14,
+    marginBottom: 6,
     color: '#4B6B50',
-    marginBottom: 8,
-  },
-  lista: {
-    paddingBottom: 16,
   },
   cardLote: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
     borderRadius: 16,
     padding: 14,
-    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#C8D9CB',
+    marginBottom: 10,
   },
   cardLoteHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 4,
   },
   cardTitulo: {
@@ -616,17 +499,17 @@ const styles = StyleSheet.create({
     color: '#1D5B2C',
   },
   cardLinha: {
-    fontSize: 12,
     color: '#4B6B50',
+    fontSize: 13,
   },
   cardValor: {
-    fontWeight: '600',
-    color: '#1D5B2C',
+    fontWeight: '700',
+    color: '#166534',
   },
   badge: {
-    borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
+    borderRadius: 999,
   },
   badgeGerar: {
     backgroundColor: '#DCFCE7',
@@ -642,19 +525,7 @@ const styles = StyleSheet.create({
   badgeTextoReimprimir: {
     color: '#92400E',
   },
-  center: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  mensagemErro: {
-    color: '#B91C1C',
-    marginBottom: 8,
-  },
-  semLotes: {
-    color: '#4B6B50',
-  },
-  // modal
+  lista: { paddingBottom: 20 },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
@@ -662,26 +533,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalCaixa: {
+    backgroundColor: '#fff',
     width: '85%',
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 18,
+    padding: 20,
   },
   modalTitulo: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#1D5B2C',
     marginBottom: 6,
+    color: '#1D5B2C',
   },
   modalTexto: {
     fontSize: 13,
     color: '#4B6B50',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   modalBotoesLinha: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    flexWrap: 'wrap',
     gap: 8,
   },
   modalBotao: {
@@ -691,20 +561,18 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   modalBotaoTexto: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 13,
+    color: '#fff',
+    fontWeight: '700',
   },
   modalBotaoSecundario: {
+    borderWidth: 1,
+    borderColor: '#666',
+    borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#6B7280',
-    marginRight: 'auto',
   },
   modalBotaoSecundarioTexto: {
-    fontSize: 13,
-    color: '#374151',
+    color: '#333',
+    fontWeight: '600',
   },
 });
