@@ -12,6 +12,8 @@ import {
   View,
 } from 'react-native';
 
+const API_BASE_URL = 'https://docampo-backend-production.up.railway.app/api';
+
 export default function CadastroProdutor() {
   const router = useRouter();
 
@@ -63,21 +65,27 @@ export default function CadastroProdutor() {
         estado: '',
       };
 
-      const resp = await fetch(
-        'http://docampo-backend-production.up.railway.app/api/produtores/cadastrar',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        }
-      );
+      const resp = await fetch(`${API_BASE_URL}/cadastro-produtor`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
 
-      const data = await resp.json();
+      let data: any = {};
+      try {
+        data = await resp.json();
+      } catch {
+        // se não vier JSON, ignora
+      }
 
       if (!resp.ok) {
-        setErro(data.message || 'Erro ao cadastrar produtor.');
+        setErro(
+          data.erro ||
+            data.message ||
+            'Erro ao cadastrar produtor.'
+        );
       } else {
         // limpa formulário
         setNome('');
@@ -87,11 +95,14 @@ export default function CadastroProdutor() {
         setSenha('');
         setConfirmarSenha('');
 
-        setMensagem(data.message || 'Produtor cadastrado com sucesso.');
+        const msg =
+          data.message || data.mensagem || 'Produtor cadastrado com sucesso.';
+
+        setMensagem(msg);
 
         // abre modal de sucesso
         setModalMensagem(
-          data.message ||
+          msg ||
             'Sua conta foi criada com sucesso. Agora você já pode fazer login.'
         );
         setModalVisivel(true);
