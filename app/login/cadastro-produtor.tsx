@@ -64,7 +64,7 @@ export default function CadastroProdutor() {
       };
 
       const resp = await fetch(
-        'http://localhost:3001/api/produtores/cadastrar',
+        'http://docampo-backend-production.up.railway.app/api/produtores/cadastrar',
         {
           method: 'POST',
           headers: {

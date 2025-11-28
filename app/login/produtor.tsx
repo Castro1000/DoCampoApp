@@ -34,7 +34,8 @@ export default function LoginProdutor() {
     setLoading(true);
 
     try {
-      const resp = await fetch('http://localhost:3001/api/login-produtor', {
+      const resp = await fetch('https://docampo-backend-production.up.railway.app/api/login-produtor', {
+
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
