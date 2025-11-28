@@ -51,11 +51,14 @@ export default function ConsultaPublicaScreen() {
     return d.toLocaleDateString();
   }
 
-  // tenta extrair DOCAMPO-000X de um JSON lido pelo QR
+  // 🔧 NORMALIZA o código lido/digitado para bater com o banco
+  // - Se vier JSON, tenta pegar campo "codigo" ou "loteId"
+  // - Se for só número -> DOCAMPO-<numero>
+  // - Se for DOCAMPO-0021 -> DOCAMPO-21 (remove zeros à esquerda)
   function normalizarCodigoBruto(codigoBruto: string): string {
     let codigoFinal = codigoBruto.trim();
 
-    // se for um JSON (começa com {), tenta pegar o campo "codigo"
+    // se for um JSON (começa com {), tenta pegar o campo "codigo" ou "loteId"
     if (codigoFinal.startsWith("{")) {
       try {
         const obj = JSON.parse(codigoFinal);
@@ -63,10 +66,9 @@ export default function ConsultaPublicaScreen() {
           if (obj.codigo) {
             codigoFinal = String(obj.codigo);
           } else if (obj.loteId) {
-            // fallback: monta pelo id do lote
             const idNum = Number(obj.loteId);
             if (!Number.isNaN(idNum)) {
-              codigoFinal = `DOCAMPO-${String(idNum).padStart(4, "0")}`;
+              codigoFinal = `DOCAMPO-${idNum}`;
             }
           }
         }
@@ -75,7 +77,26 @@ export default function ConsultaPublicaScreen() {
       }
     }
 
-    return codigoFinal.trim().toUpperCase();
+    codigoFinal = codigoFinal.trim().toUpperCase();
+
+    // se vier só número → DOCAMPO-<numero>
+    if (/^\d+$/.test(codigoFinal)) {
+      const num = parseInt(codigoFinal, 10);
+      if (!Number.isNaN(num)) {
+        codigoFinal = `DOCAMPO-${num}`;
+      }
+    }
+
+    // se vier DOCAMPO-0001, DOCAMPO-0021 etc → remove zeros à esquerda
+    const match = /^DOCAMPO-0*(\d+)$/.exec(codigoFinal);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!Number.isNaN(num)) {
+        codigoFinal = `DOCAMPO-${num}`;
+      }
+    }
+
+    return codigoFinal;
   }
 
   async function handleConsultar(codigoParam?: string) {
@@ -129,7 +150,6 @@ export default function ConsultaPublicaScreen() {
   async function abrirScanner() {
     setErro(null);
 
-    // Se estiver no navegador web, não usamos o BarCodeScanner
     if (isWeb) {
       setErro(
         "A leitura por câmera não é suportada nesta versão web. Digite o código de rastreio manualmente ou utilize o app instalado."
@@ -137,7 +157,6 @@ export default function ConsultaPublicaScreen() {
       return;
     }
 
-    // Se ainda não pediu permissão, pede agora
     if (temPermissaoCamera === null) {
       const { status } = await BarCodeScanner.requestPermissionsAsync();
       const ok = status === "granted";
@@ -156,7 +175,6 @@ export default function ConsultaPublicaScreen() {
       return;
     }
 
-    // Permissão OK → ativa o scanner
     setScannerAtivo(true);
   }
 
@@ -174,12 +192,10 @@ export default function ConsultaPublicaScreen() {
       return;
     }
 
-    // Preenche o campo com DOCAMPO-000X e já consulta
     setCodigo(valorNormalizado);
     handleConsultar(valorNormalizado);
   }
 
-  // Se o scanner está ativo (somente em app nativo), mostramos a “tela” de câmera
   if (scannerAtivo && !isWeb) {
     return (
       <View style={styles.scannerContainer}>
@@ -188,7 +204,6 @@ export default function ConsultaPublicaScreen() {
           onBarCodeScanned={handleBarCodeScanned}
         />
 
-        {/* Overlay com instruções */}
         <View style={styles.scannerOverlay}>
           <View style={styles.scannerFrame} />
           <View style={styles.scannerTextBox}>
@@ -220,7 +235,6 @@ export default function ConsultaPublicaScreen() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        {/* topo */}
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={styles.voltarText}>{"< Voltar"}</Text>
@@ -240,7 +254,6 @@ export default function ConsultaPublicaScreen() {
           QR/código impresso na embalagem.
         </Text>
 
-        {/* Campo de código */}
         <Text style={styles.label}>Código de rastreio</Text>
         <TextInput
           style={styles.input}
@@ -252,7 +265,6 @@ export default function ConsultaPublicaScreen() {
           autoCorrect={false}
         />
 
-        {/* Botão consultar */}
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={() => handleConsultar()}
@@ -265,7 +277,6 @@ export default function ConsultaPublicaScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Botão scanner (explicação extra no web) */}
         <TouchableOpacity style={styles.scanButton} onPress={abrirScanner}>
           <Text style={styles.scanButtonText}>
             {isWeb
@@ -274,10 +285,8 @@ export default function ConsultaPublicaScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* MENSAGENS */}
         {erro && <Text style={styles.errorText}>{erro}</Text>}
 
-        {/* RESULTADO */}
         {resultado && (
           <View style={styles.cardResultado}>
             <Text style={styles.cardHeader}>Origem do alimento</Text>
@@ -491,8 +500,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#6B7280",
   },
-
-  // ---- scanner ----
   scannerContainer: {
     flex: 1,
     backgroundColor: "#000",

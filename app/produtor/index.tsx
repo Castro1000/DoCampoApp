@@ -206,7 +206,7 @@ export default function HomeProdutor() {
   return (
     <View style={styles.root}>
       <View style={styles.container}>
-        {/* HEADER */}
+        {/* HEADER — AGORA SÓ AVATAR E NOME, SEM LOCAL NEM SINO */}
         <View style={styles.header}>
           <View style={styles.headerPerfil}>
             <View style={styles.avatar}>
@@ -218,15 +218,8 @@ export default function HomeProdutor() {
             </View>
           </View>
 
-          <View style={styles.headerAcoes}>
-            <View style={styles.localBox}>
-              <Text style={styles.localLabel}>Local</Text>
-              <Text style={styles.localValor}>Minha propriedade</Text>
-            </View>
-            <TouchableOpacity style={styles.btnSino}>
-              <Text style={styles.btnSinoTexto}>🔔</Text>
-            </TouchableOpacity>
-          </View>
+          {/* espaço vazio só pra manter o alinhamento à direita */}
+          <View style={{ width: 60 }} />
         </View>
 
         {/* CARROSSEL */}
@@ -384,7 +377,7 @@ export default function HomeProdutor() {
         </TouchableOpacity>
       </View>
 
-      {/* Botão sair flutuante */}
+      {/* Botão sair flutuante (continua igual) */}
       <TouchableOpacity style={styles.btnSairFlutuante} onPress={handleSair}>
         <Text style={styles.btnSairFlutuanteTexto}>Sair</Text>
       </TouchableOpacity>
@@ -436,41 +429,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1D5B2C',
   },
-  headerAcoes: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  localBox: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 999,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#C8D9CB',
-  },
-  localLabel: {
-    fontSize: 10,
-    color: '#4B6B50',
-  },
-  localValor: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#1D5B2C',
-  },
-  btnSino: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#C8D9CB',
-  },
-  btnSinoTexto: {
-    fontSize: 16,
-  },
+
   carouselBloco: {
     marginBottom: 16,
   },

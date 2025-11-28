@@ -34,39 +34,72 @@ export default function LoginProdutor() {
     setLoading(true);
 
     try {
-      const resp = await fetch('https://docampo-backend-production.up.railway.app/api/login-produtor', {
-
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        // backend espera { cpf, senha }
-        body: JSON.stringify({ cpf: login, senha }),
-      });
+      const resp = await fetch(
+        'https://docampo-backend-production.up.railway.app/api/login-produtor',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          // backend espera { cpf, senha }
+          body: JSON.stringify({ cpf: login, senha }),
+        }
+      );
 
       const data = await resp.json();
 
       if (!resp.ok) {
         setErro(data.erro || 'Falha no login.');
       } else {
-        // Salvar dados do produtor no AsyncStorage (chaves antigas, para não quebrar nada)
-        await AsyncStorage.setItem('@produtor_id', String(data.usuario.id));
-        await AsyncStorage.setItem('@produtor_nome', data.usuario.nome);
+        // 1) Dados básicos já usados no app
+        await AsyncStorage.setItem(
+          '@produtor_id',
+          String(data.usuario.id)
+        );
+        await AsyncStorage.setItem(
+          '@produtor_nome',
+          data.usuario.nome || ''
+        );
 
-        // >>> NOVO: salvar também no formato unificado @docampo_usuario
+        // 2) NOVO: salvar senha para mostrar no perfil (como você pediu)
+        //    Aqui usamos a mesma senha digitada no login
+        await AsyncStorage.setItem('@produtor_senha', senha);
+
+        // 3) Tentar puxar e-mail e telefone do backend
+        //    (ajuste os nomes se seu backend usar outro campo)
+        const email =
+          data.usuario.email ||
+          data.usuario.email_produtor ||
+          '';
+        const telefone =
+          data.usuario.telefone ||
+          data.usuario.celular ||
+          data.usuario.telefone_produtor ||
+          '';
+
+        const documento =
+          data.usuario.cpf ||
+          data.usuario.cnpj ||
+          login ||
+          '';
+
+        await AsyncStorage.setItem('@produtor_email', email);
+        await AsyncStorage.setItem('@produtor_telefone', telefone);
+        await AsyncStorage.setItem('@produtor_documento', documento);
+
+        // 4) Payload unificado que você já usava
         const payload = {
           tipo: 'produtor',
           id: data.usuario.id,
           nome: data.usuario.nome,
-          cpf: data.usuario.cpf, // usado na tela de transportes
+          cpf: data.usuario.cpf, // usado em outras telas
         };
-
-        await AsyncStorage.setItem('@docampo_usuario', JSON.stringify(payload));
-        // <<< FIM DO NOVO TRECHO
+        await AsyncStorage.setItem(
+          '@docampo_usuario',
+          JSON.stringify(payload)
+        );
 
         setMensagem('Login realizado com sucesso!');
-
-        // Redirecionar para a Home do produtor
         router.replace('/produtor');
       }
     } catch (e) {
@@ -120,7 +153,7 @@ export default function LoginProdutor() {
           />
           <TouchableOpacity
             style={styles.mostrarBtn}
-            onPress={() => setMostrarSenha((prev) => !prev)}
+            onPress={() => setMostrarSenha(prev => !prev)}
           >
             <Text style={styles.mostrarText}>
               {mostrarSenha ? 'Ocultar' : 'Mostrar'}
@@ -147,7 +180,9 @@ export default function LoginProdutor() {
       </TouchableOpacity>
 
       {/* Mensagens */}
-      {mensagem ? <Text style={styles.mensagemSucesso}>{mensagem}</Text> : null}
+      {mensagem ? (
+        <Text style={styles.mensagemSucesso}>{mensagem}</Text>
+      ) : null}
       {erro ? <Text style={styles.mensagemErro}>{erro}</Text> : null}
 
       {/* Criar conta */}
