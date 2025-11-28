@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalBotaoConfirmar: {
-    backgroundColor: '#1D5B2C',
+    backgroundColor: '#186a2cff',
     paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 999,
